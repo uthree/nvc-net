@@ -166,3 +166,7 @@ cython_debug/
 # vim
 *.swp
 *.swo
+
+# model
+*.pt
+
