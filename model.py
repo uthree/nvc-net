@@ -152,8 +152,7 @@ class Generator(nn.Module):
                     nn.Conv1d(4, 512, 7, 1, 3)),
                 nn.GELU(),
                 weight_norm(
-                    nn.Conv1d(512, 512, 7, 1, 3)),
-                nn.GELU())
+                    nn.Conv1d(512, 512, 7, 1, 3)))
         self.output_layer = weight_norm(
                 nn.Conv1d(32, 1, 7, 1, 3))
 
@@ -176,10 +175,10 @@ class VoiceConvertor(nn.Module):
         self.speaker_encoder = SpeakerEncoder()
         self.generator = Generator()
 
+
 class ScaleDiscriminator(nn.Module):
     def __init__(
             self,
-            segment_size=16,
             channels=[64, 64, 64],
             norm_type='spectral',
             kernel_size=11,
@@ -190,7 +189,6 @@ class ScaleDiscriminator(nn.Module):
             ):
         super().__init__()
         self.pool = torch.nn.AvgPool1d(pool)
-        self.segment_size = segment_size
         if norm_type == 'weight':
             norm_f = nn.utils.weight_norm
         elif norm_type == 'spectral':
@@ -198,9 +196,9 @@ class ScaleDiscriminator(nn.Module):
         else:
             raise f"Normalizing type {norm_type} is not supported."
         self.layers = nn.ModuleList([])
-        self.outputs = nn.ModuleList([])
+        self.output_layer = nn.Conv1d(channels[-1], 1, 7, 1, 3)
 
-        self.input_layer = norm_f(nn.Conv1d(segment_size, channels[0], 1, 1, 0))
+        self.input_layer = norm_f(nn.Conv1d(1, channels[0], 7, 1, 3))
         for i in range(len(channels)-1):
             if i == 0:
                 k = 15
@@ -209,34 +207,24 @@ class ScaleDiscriminator(nn.Module):
             self.layers.append(
                     norm_f(
                         nn.Conv1d(channels[i], channels[i+1], k, strides[i], 0, groups=groups[i])))
-            self.outputs.append(
-                    norm_f(
-                        nn.Conv1d(channels[i+1], 1, 1, 1, 0)))
 
     def forward(self, x):
-        # Padding
-        if x.shape[1] % self.segment_size != 0:
-            pad_len = self.segment_size - (x.shape[1] % self.segment_size)
-            x = torch.cat([x, torch.zeros(x.shape[0], pad_len, device=x.device)], dim=1)
-        x = x.view(x.shape[0], self.segment_size, -1)
+        x = x.unsqueeze(1)
         x = self.pool(x)
         x = self.input_layer(x)
-        logits = []
-        for layer, output in zip(self.layers, self.outputs):
+        x = F.leaky_relu(x, 0.2)
+        for layer in self.layers:
             x = layer(x)
             x = F.leaky_relu(x, 0.2)
-            logits.append(output(x))
-        return logits
+        logit = self.output_layer(x)
+        return logit
 
     def feat(self, x):
-        # Padding
-        if x.shape[1] % self.segment_size != 0:
-            pad_len = self.segment_size - (x.shape[1] % self.segment_size)
-            x = torch.cat([x, torch.zeros(x.shape[0], pad_len, device=x.device)], dim=1)
-        x = x.view(x.shape[0], self.segment_size, -1)
+        x = x.unsqueeze(1)
         x = self.pool(x)
         x = self.input_layer(x)
-        feats = [x]
+        x = F.leaky_relu(x, 0.2)
+        feats = []
         for layer in self.layers:
             x = layer(x)
             x = F.leaky_relu(x, 0.2)
@@ -248,26 +236,22 @@ class MultiScaleDiscriminator(nn.Module):
     def __init__(
             self,
             segments=[1, 1, 1],
-            channels=[32, 64, 128, 256, 512, 1024],
-            kernel_sizes=[15, 41, 41, 41, 41, 41],
-            strides=[1, 2, 4, 4, 4, 4],
-            groups=[1, 1, 2, 2, 4, 4],
+            channels=[32, 64, 128, 256],
+            kernel_sizes=[15, 41, 41, 41],
+            strides=[2, 2, 8, 8],
+            groups=[1, 1, 1, 1],
             pools=[1, 2, 4]
             ):
         super().__init__()
         self.sub_discriminators = nn.ModuleList([])
         for i, (k, sg, p) in enumerate(zip(kernel_sizes, segments, pools)):
-            if i == 0:
-                n = 'spectral'
-            else:
-                n = 'weight'
             self.sub_discriminators.append(
-                    ScaleDiscriminator(sg, channels, n, k, strides, groups=groups, pool=p))
+                    ScaleDiscriminator(channels, 'weight', k, strides, groups=groups, pool=p))
 
     def forward(self, x):
         logits = []
         for sd in self.sub_discriminators:
-            logits += sd(x)
+            logits.append(sd(x))
         return logits
 
     def feat(self, x):
@@ -296,7 +280,7 @@ class Discriminator(nn.Module):
 
 
 class MelSpectrogramLoss(nn.Module):
-    def __init__(self, sample_rate=22050, n_ffts=[512, 1024, 2048], n_mels=80, normalized=False):
+    def __init__(self, sample_rate=22050, n_ffts=[512, 1024, 2048], n_mels=80, normalized=True):
         super().__init__()
         self.to_mels = nn.ModuleList([])
         for n_fft in n_ffts:

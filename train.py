@@ -13,8 +13,8 @@ from dataset import WaveFileDirectory
 
 
 def load_or_init_models(device=torch.device('cpu')):
-    D = Discriminator().to(device)
     C = VoiceConvertor().to(device)
+    D = Discriminator().to(device)
     if os.path.exists("convertor.pt"):
         C.load_state_dict(torch.load("convertor.pt", map_location=device))
     if os.path.exists("discriminator.pt"):
@@ -76,7 +76,7 @@ for epoch in range(args.epoch):
         wave = wave.to(device)
         wave_src, wave_tgt = wave.chunk(2, dim=0)
         
-        C.zero_grad()
+        OptC.zero_grad()
         with torch.cuda.amp.autocast(enabled=args.fp16):
             src_mean, src_logvar = Es(wave_src)
             spk_src = src_mean + torch.exp(src_logvar) * torch.randn(*src_logvar.shape, device=src_logvar.device)
@@ -101,7 +101,7 @@ for epoch in range(args.epoch):
         scaler.scale(loss_C).backward()
         scaler.step(OptC)
 
-        D.zero_grad()
+        OptD.zero_grad()
         wave_fake = wave_fake.detach()
         with torch.cuda.amp.autocast(enabled=args.fp16):
             loss_D = 0
