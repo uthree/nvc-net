@@ -48,7 +48,6 @@ class SpeakerEncoder(nn.Module):
         return mean, logvar
 
 
-
 class ContentEncoderResBlock(nn.Module):
     def __init__(self, channels, dilation=3):
         super().__init__()
@@ -196,9 +195,8 @@ class ScaleDiscriminator(nn.Module):
         else:
             raise f"Normalizing type {norm_type} is not supported."
         self.layers = nn.ModuleList([])
-        self.output_layer = nn.Conv1d(channels[-1], 1, 7, 1, 3)
-
-        self.input_layer = norm_f(nn.Conv1d(1, channels[0], 7, 1, 3))
+        self.output_layers = nn.ModuleList([])
+        self.input_layer = norm_f(nn.Conv1d(1, channels[0], 15, 1, 0))
         for i in range(len(channels)-1):
             if i == 0:
                 k = 15
@@ -207,17 +205,21 @@ class ScaleDiscriminator(nn.Module):
             self.layers.append(
                     norm_f(
                         nn.Conv1d(channels[i], channels[i+1], k, strides[i], 0, groups=groups[i])))
+            self.output_layers.append(
+                    norm_f(
+                        nn.Conv1d(channels[i+1], 1, 1, 1, 0)))
 
     def forward(self, x):
         x = x.unsqueeze(1)
         x = self.pool(x)
         x = self.input_layer(x)
         x = F.leaky_relu(x, 0.2)
-        for layer in self.layers:
+        logits = []
+        for layer, output_layer in zip(self.layers, self.output_layers):
             x = layer(x)
             x = F.leaky_relu(x, 0.2)
-        logit = self.output_layer(x)
-        return logit
+            logits.append(output_layer(x))
+        return logits
 
     def feat(self, x):
         x = x.unsqueeze(1)
@@ -237,8 +239,8 @@ class MultiScaleDiscriminator(nn.Module):
             self,
             segments=[1, 1, 1],
             channels=[32, 64, 128, 256],
-            kernel_sizes=[15, 41, 41, 41],
-            strides=[2, 2, 8, 8],
+            kernel_sizes=[41, 41, 41],
+            strides=[2, 2, 4, 4],
             groups=[1, 1, 1, 1],
             pools=[1, 2, 4]
             ):
@@ -251,7 +253,7 @@ class MultiScaleDiscriminator(nn.Module):
     def forward(self, x):
         logits = []
         for sd in self.sub_discriminators:
-            logits.append(sd(x))
+            logits += sd(x)
         return logits
 
     def feat(self, x):
@@ -280,7 +282,7 @@ class Discriminator(nn.Module):
 
 
 class MelSpectrogramLoss(nn.Module):
-    def __init__(self, sample_rate=22050, n_ffts=[512, 1024, 2048], n_mels=80, normalized=True):
+    def __init__(self, sample_rate=22050, n_ffts=[512, 1024, 2048], n_mels=80, normalized=False):
         super().__init__()
         self.to_mels = nn.ModuleList([])
         for n_fft in n_ffts:

@@ -36,6 +36,7 @@ parser.add_argument('-b', '--batch', default=4, type=int)
 parser.add_argument('-fp16', default=False, type=bool)
 parser.add_argument('-m', '--maxdata', default=-1, type=int, help="max dataset size")
 parser.add_argument('-lr', '--learning-rate', default=1e-4, type=float)
+parser.add_argument('-gacc', '--gradient-accumulation', default=2, type=int)
 
 args = parser.parse_args()
 device = torch.device(args.device)
@@ -58,12 +59,13 @@ ds = WaveFileDirectory(
 
 dl = torch.utils.data.DataLoader(ds, batch_size=args.batch*2, shuffle=True)
 
-OptC = optim.Adam(C.parameters(), lr=args.learning_rate, betas=(0.5, 0.999))
-OptD = optim.Adam(D.parameters(), lr=args.learning_rate, betas=(0.5, 0.999))
+OptC = optim.Adam(C.parameters(), lr=args.learning_rate, betas=(0.5, 0.9))
+OptD = optim.Adam(D.parameters(), lr=args.learning_rate, betas=(0.5, 0.9))
 
 mel_loss = MelSpectrogramLoss().to(device)
 L1 = nn.L1Loss()
 scaler = torch.cuda.amp.GradScaler(enabled=args.fp16)
+grad_accm = args.gradient_accumulation
 
 
 for epoch in range(args.epoch):
@@ -76,7 +78,8 @@ for epoch in range(args.epoch):
         wave = wave.to(device)
         wave_src, wave_tgt = wave.chunk(2, dim=0)
         
-        OptC.zero_grad()
+        if batch % grad_accm == 0:
+            OptC.zero_grad()
         with torch.cuda.amp.autocast(enabled=args.fp16):
             src_mean, src_logvar = Es(wave_src)
             spk_src = src_mean + torch.exp(src_logvar) * torch.randn(*src_logvar.shape, device=src_logvar.device)
@@ -99,9 +102,12 @@ for epoch in range(args.epoch):
                     (-1 - tgt_logvar + torch.exp(tgt_logvar) + src_mean ** 2).mean()
             loss_C = loss_adv + loss_rec * weight_rec + weight_con * loss_con + weight_kl * loss_kl
         scaler.scale(loss_C).backward()
-        scaler.step(OptC)
 
-        OptD.zero_grad()
+        if batch % grad_accm == 0:
+            scaler.step(OptC)
+        
+        if batch % grad_accm == 0:
+            OptD.zero_grad()
         wave_fake = wave_fake.detach()
         with torch.cuda.amp.autocast(enabled=args.fp16):
             loss_D = 0
@@ -112,8 +118,10 @@ for epoch in range(args.epoch):
             for logit in logits:
                 loss_D += (logit ** 2).mean() / len(logits)
         scaler.scale(loss_D).backward()
-        scaler.step(OptD)
-        scaler.update()
+
+        if batch % grad_accm == 0:
+            scaler.step(OptD)
+            scaler.update()
 
         if batch % 100 == 0:
             save_models(C, D)
