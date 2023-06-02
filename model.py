@@ -12,6 +12,11 @@ def padding_wave(x, period=256):
     return x
 
 
+def initialize_weight(model):
+    if isinstance(model, nn.Conv1d):
+        nn.init.normal_(model.weight, mean=0.0, std=0.02)
+
+
 class SpeakerEncoder(nn.Module):
     def __init__(self, ):
         super().__init__()
@@ -92,6 +97,7 @@ class ContentEncoder(nn.Module):
                 weight_norm(nn.Conv1d(512, 4, 7, 1, 3)),
                 nn.GELU(),
                 weight_norm(nn.Conv1d(4, 4, 7, 1, 3)))
+        self.apply(initialize_weight)
 
     def forward(self, x):
         x = padding_wave(x)
@@ -154,6 +160,7 @@ class Generator(nn.Module):
                     nn.Conv1d(512, 512, 7, 1, 3)))
         self.output_layer = weight_norm(
                 nn.Conv1d(32, 1, 7, 1, 3))
+        self.apply(initialize_weight)
 
     def forward(self, x, spk):
         x = self.input_layers(x)
@@ -239,8 +246,8 @@ class MultiScaleDiscriminator(nn.Module):
             self,
             segments=[1, 1, 1],
             channels=[32, 64, 128, 256],
-            kernel_sizes=[41, 41, 41],
-            strides=[2, 2, 4, 4],
+            kernel_sizes=[15, 15, 15],
+            strides=[4, 4, 4, 4],
             groups=[1, 1, 1, 1],
             pools=[1, 2, 4]
             ):
@@ -282,7 +289,7 @@ class Discriminator(nn.Module):
 
 
 class MelSpectrogramLoss(nn.Module):
-    def __init__(self, sample_rate=22050, n_ffts=[512, 1024, 2048], n_mels=80, normalized=False):
+    def __init__(self, sample_rate=22050, n_ffts=[512, 1024, 2048], n_mels=80, normalized=True):
         super().__init__()
         self.to_mels = nn.ModuleList([])
         for n_fft in n_ffts:
