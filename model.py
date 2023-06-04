@@ -94,9 +94,9 @@ class ContentEncoder(nn.Module):
                         nn.Conv1d(c1, c2, rate*2, rate, rate//2)))
         self.input_layer = weight_norm(nn.Conv1d(1, 32, 7, 1, 3))
         self.output_layers = nn.Sequential(
-                weight_norm(nn.Conv1d(512, 4, 7, 1, 3)),
+                weight_norm(nn.Conv1d(512, 512, 7, 1, 3)),
                 nn.GELU(),
-                weight_norm(nn.Conv1d(4, 4, 7, 1, 3)))
+                weight_norm(nn.Conv1d(512, 4, 7, 1, 3)))
         self.apply(initialize_weight)
 
     def forward(self, x):
@@ -109,6 +109,7 @@ class ContentEncoder(nn.Module):
             x = F.gelu(x)
             x = d(x)
         x = self.output_layers(x)
+        x = x / torch.sum(x**2 + 1e-6, dim=2, keepdim=True)**0.5
         return x
 
 
