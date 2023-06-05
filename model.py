@@ -43,6 +43,7 @@ class SpeakerEncoder(nn.Module):
                 nn.LeakyReLU(0.2),
                 nn.AvgPool1d(2))
         self.output_layer = nn.Conv1d(512, 256, 1, 1, 0)
+        self.apply(initialize_weight)
 
     def forward(self, x):
         x = self.to_mel(x)
@@ -66,7 +67,8 @@ class ContentEncoderResBlock(nn.Module):
         x = self.input_conv(x)
         x = torch.sigmoid(x[:, self.channels:]) * torch.tanh(x[:, :self.channels])
         x = self.output_conv(x)
-        return x + res
+        x = x + res
+        return x
 
 
 class ContentEncoderResStack(nn.Module):
@@ -94,7 +96,10 @@ class ContentEncoder(nn.Module):
                     weight_norm(
                         nn.Conv1d(c1, c2, rate*2, rate, rate//2, padding_mode='reflect')))
         self.input_layer = weight_norm(nn.Conv1d(1, 32, 7, 1, 3, padding_mode='reflect'))
-        self.output_layers = nn.Sequential(nn.GELU(),
+        self.output_layers = nn.Sequential(
+                nn.GELU(),
+                weight_norm(nn.Conv1d(512, 512, 7, 1, 3, padding_mode='reflect')),
+                nn.GELU(),
                 weight_norm(nn.Conv1d(512, 4, 7, 1, 3, padding_mode='reflect')))
         self.apply(initialize_weight)
 
@@ -102,13 +107,11 @@ class ContentEncoder(nn.Module):
         x = pad_wave(x)
         x = x.unsqueeze(1)
         x = self.input_layer(x)
-        x = F.gelu(x)
         for r, d in zip(self.res_blocks, self.downsamples):
             x = r(x)
-            x = F.gelu(x)
             x = d(x)
         x = self.output_layers(x)
-        x = x / torch.sum(x**2 + 1e-6, dim=2, keepdim=True)**0.5
+        x = x / torch.sum(x**2 + 1e-6, dim=1, keepdim=True)**0.5
         return x
 
 
@@ -126,7 +129,8 @@ class GeneratorResBlock(nn.Module):
         x = self.input_conv(x) + self.spk_conv(spk)
         x = torch.sigmoid(x[:, self.channels:]) * torch.tanh(x[:, :self.channels])
         x = self.output_conv(x)
-        return x + res
+        x = x + res
+        return x
 
 
 class GeneratorResStack(nn.Module):
@@ -155,8 +159,9 @@ class Generator(nn.Module):
                         nn.ConvTranspose1d(c2, c1, rate*2, rate, rate//2)))
         self.input_layers = nn.Sequential(
                 nn.GELU(),
-                weight_norm(
-                    nn.Conv1d(4, 512, 7, 1, 3, padding_mode='reflect')))
+                weight_norm(nn.Conv1d(4, 512, 7, 1, 3, padding_mode='reflect')),
+                nn.GELU(),
+                weight_norm(nn.Conv1d(512, 512, 7, 1, 3, padding_mode='reflect')))
         self.output_layer = nn.Sequential (
                 nn.GELU(),
                 weight_norm(
@@ -166,7 +171,6 @@ class Generator(nn.Module):
     def forward(self, x, spk):
         x = self.input_layers(x)
         for r, u in zip(self.res_blocks, self.upsamples):
-            x = F.gelu(x)
             x = u(x)
             x = r(x, spk)
         x = self.output_layer(x)
@@ -275,6 +279,7 @@ class Discriminator(nn.Module):
     def __init__(self):
         super().__init__()
         self.MSD = MultiScaleDiscriminator()
+        self.apply(initialize_weight)
 
     def logits(self, x):
         return self.MSD(x)
@@ -285,7 +290,7 @@ class Discriminator(nn.Module):
         fake_feat = self.MSD.feat(fake)
         loss = 0
         for r, f in zip(real_feat, fake_feat):
-            loss = loss + F.l1_loss(f, r) / len(real_feat)
+            loss += (f-r).abs().mean() / len(real_feat)
         return loss
 
 

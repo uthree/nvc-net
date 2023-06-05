@@ -47,7 +47,7 @@ Es = C.speaker_encoder
 G = C.generator
 
 weight_kl = 0.02
-weight_con = 10.0
+weight_con = 0# 10.0
 weight_rec = 10.0
 weight_mel = 1.0
 
@@ -95,7 +95,7 @@ for epoch in range(args.epoch):
             logits = D.logits(wave_fake)
             for logit in logits:
                 loss_adv += BCE(logit, torch.zeros_like(logit)) / len(logits)
-            loss_con = L1(Ec(wave_fake), c)
+            loss_con = ((Ec(wave_fake) - c) ** 2).mean()
             loss_kl = (-1 - src_logvar + torch.exp(src_logvar) + src_mean ** 2).mean() +\
                     (-1 - tgt_logvar + torch.exp(tgt_logvar) + src_mean ** 2).mean()
             loss_C = loss_adv + loss_rec * weight_rec + weight_con * loss_con + weight_kl * loss_kl
