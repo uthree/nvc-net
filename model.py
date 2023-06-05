@@ -111,7 +111,7 @@ class ContentEncoder(nn.Module):
             x = r(x)
             x = d(x)
         x = self.output_layers(x)
-        x = x / torch.sum(x**2 + 1e-6, dim=1, keepdim=True)**0.5
+        x = x / (torch.std(x, dim=1, keepdim=True) + 1e-4)
         return x
 
 

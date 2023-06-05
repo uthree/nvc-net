@@ -47,7 +47,7 @@ Es = C.speaker_encoder
 G = C.generator
 
 weight_kl = 0.02
-weight_con = 0# 10.0
+weight_con = 10.0
 weight_rec = 10.0
 weight_mel = 1.0
 
