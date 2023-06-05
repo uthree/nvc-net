@@ -17,31 +17,37 @@ def initialize_weight(model):
         nn.init.normal_(model.weight, mean=0.0, std=0.02)
 
 
+class SpeakerEncoderResBlock(nn.Module):
+    def __init__(self, input_channels, output_channels):
+        super().__init__()
+        self.res_conv = weight_norm(nn.Conv1d(input_channels, output_channels, 1, 1, 0))
+        self.pool = nn.AvgPool1d(2)
+        self.conv1 = weight_norm(nn.Conv1d(input_channels, input_channels, 3, 1, 1))
+        self.relu = nn.LeakyReLU(0.2)
+        self.conv2 = weight_norm(nn.Conv1d(input_channels, output_channels, 1, 1, 0))
+
+    def forward(self, x):
+        res = self.pool(self.res_conv(x))
+        x = self.conv1(x)
+        x = self.relu(x)
+        x = self.conv2(x)
+        x = self.pool(x)
+        return x + res
+
+
 class SpeakerEncoder(nn.Module):
-    def __init__(self, ):
+    def __init__(self):
         super().__init__()
         self.to_mel = torchaudio.transforms.MelSpectrogram(
                 sample_rate=22050,
                 n_mels=80,
                 n_fft=1024)
         self.layers = nn.Sequential(
-                nn.Conv1d(80, 32, 3, 1, 1),
-                nn.LeakyReLU(0.2),
-                nn.Conv1d(32, 64, 3, 1, 1),
-                nn.LeakyReLU(0.2),
-                nn.AvgPool1d(2),
-                nn.Conv1d(64, 128, 3, 1, 1),
-                nn.LeakyReLU(0.2),
-                nn.AvgPool1d(2),
-                nn.Conv1d(128, 256, 3, 1, 1),
-                nn.LeakyReLU(0.2),
-                nn.AvgPool1d(2),
-                nn.Conv1d(256, 512, 3, 1, 1),
-                nn.LeakyReLU(0.2),
-                nn.AvgPool1d(2),
-                nn.Conv1d(512, 512, 3, 1, 1),
-                nn.LeakyReLU(0.2),
-                nn.AvgPool1d(2))
+                SpeakerEncoderResBlock(80, 32),
+                SpeakerEncoderResBlock(32, 64),
+                SpeakerEncoderResBlock(64, 128),
+                SpeakerEncoderResBlock(128, 256),
+                SpeakerEncoderResBlock(256, 512))
         self.output_layer = nn.Conv1d(512, 256, 1, 1, 0)
         self.apply(initialize_weight)
 
@@ -111,7 +117,8 @@ class ContentEncoder(nn.Module):
             x = r(x)
             x = d(x)
         x = self.output_layers(x)
-        x = x / (torch.std(x, dim=1, keepdim=True) + 1e-4)
+        std = torch.std(x, dim=1, keepdim=True) + 1e-4
+        x = x / std
         return x
 
 

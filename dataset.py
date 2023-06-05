@@ -3,10 +3,11 @@ import torchaudio
 import glob
 from tqdm import tqdm
 import os
+import random
 
 
 class WaveFileDirectory(torch.utils.data.Dataset):
-    def __init__(self, source_dir_paths=[], length=65536, max_files=-1, sampling_rate=44100):
+    def __init__(self, source_dir_paths=[], length=65536, max_files=-1, sampling_rate=44100, shuffle_paths=True):
         super().__init__()
         print("Loading Data")
         self.path_list = []
@@ -16,6 +17,8 @@ class WaveFileDirectory(torch.utils.data.Dataset):
         for dir_path in source_dir_paths:
             for fmt in formats:
                 self.path_list += glob.glob(os.path.join(dir_path, f"**/*.{fmt}"), recursive=True)
+        if shuffle_paths:
+            random.shuffle(self.path_list)
         if max_files != -1:
             self.path_list = self.path_list[:max_files]
         print("Chunking")

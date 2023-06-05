@@ -75,6 +75,8 @@ for epoch in range(args.epoch):
         if N % 2 != 0:
             continue
         wave = wave.to(device)
+        # Data Augmentation
+        wave = wave * (torch.rand(N, 1,device=device) * 0.75 + 0.25)
         wave_src, wave_tgt = wave.chunk(2, dim=0)
         
         OptC.zero_grad()
