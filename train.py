@@ -63,6 +63,7 @@ OptD = optim.Adam(D.parameters(), lr=args.learning_rate, betas=(0.5, 0.9))
 
 mel_loss = MelSpectrogramLoss().to(device)
 L1 = nn.L1Loss()
+BCE = nn.BCEWithLogitsLoss()
 scaler = torch.cuda.amp.GradScaler(enabled=args.fp16)
 
 
@@ -79,26 +80,27 @@ for epoch in range(args.epoch):
         OptC.zero_grad()
         with torch.cuda.amp.autocast(enabled=args.fp16):
             src_mean, src_logvar = Es(wave_src)
-            spk_src = src_mean + torch.exp(src_logvar) * torch.randn(*src_logvar.shape, device=src_logvar.device)
+            z_src = src_mean + torch.exp(src_logvar) * torch.randn(*src_logvar.shape, device=src_logvar.device)
             tgt_mean, tgt_logvar = Es(wave_tgt)
-            spk_tgt = tgt_mean + torch.exp(tgt_logvar) * torch.randn(*tgt_logvar.shape, device=tgt_logvar.device)
+            z_tgt = tgt_mean + torch.exp(tgt_logvar) * torch.randn(*tgt_logvar.shape, device=tgt_logvar.device)
 
-            z = Ec(wave_src)
-            wave_rec = G(z, spk_src)
+            c = Ec(wave_src)
+            wave_rec = G(c, z_src)
 
             loss_fm = D.feat_loss(wave_rec, wave_src)
             loss_mel = mel_loss(wave_rec, wave_src)
             loss_rec = loss_fm + weight_mel * loss_mel
-            wave_fake = G(z, spk_tgt)
+            wave_fake = G(c, z_tgt)
             loss_adv = 0
             logits = D.logits(wave_fake)
             for logit in logits:
-                loss_adv += (logit ** 2).mean() / len(logits)
-            loss_con = L1(Ec(wave_fake), z)
+                loss_adv += BCE(logit, torch.zeros_like(logit)) / len(logits)
+            loss_con = L1(Ec(wave_fake), c)
             loss_kl = (-1 - src_logvar + torch.exp(src_logvar) + src_mean ** 2).mean() +\
                     (-1 - tgt_logvar + torch.exp(tgt_logvar) + src_mean ** 2).mean()
             loss_C = loss_adv + loss_rec * weight_rec + weight_con * loss_con + weight_kl * loss_kl
         scaler.scale(loss_C).backward()
+        torch.nn.utils.clip_grad_norm_(C.parameters(), 1.0, 2.0)
         scaler.step(OptC)
         
         OptD.zero_grad()
@@ -107,11 +109,12 @@ for epoch in range(args.epoch):
             loss_D = 0
             logits = D.logits(wave_fake)
             for logit in logits:
-                loss_D += ((logit - 1) ** 2).mean() / len(logits)
+                loss_D += BCE(logit, torch.ones_like(logit))  / len(logits)
             logits = D.logits(wave_src)
             for logit in logits:
-                loss_D += (logit ** 2).mean() / len(logits)
+                loss_D += BCE(logit, torch.zeros_like(logit))  / len(logits)
         scaler.scale(loss_D).backward()
+        torch.nn.utils.clip_grad_norm_(D.parameters(), 1.0, 2.0)
         scaler.step(OptD)
 
         scaler.update()

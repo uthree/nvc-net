@@ -5,7 +5,7 @@ from torch.nn.utils import weight_norm
 import torchaudio
 
 
-def padding_wave(x, period=256):
+def pad_wave(x, period=256):
     if x.shape[1] % period != 0:
         pad_len = period - (x.shape[1] % period)
         x = torch.cat([x, torch.zeros(x.shape[0], pad_len, device=x.device)], dim=1)
@@ -57,7 +57,7 @@ class ContentEncoderResBlock(nn.Module):
     def __init__(self, channels, dilation=3):
         super().__init__()
         self.res_conv = weight_norm(nn.Conv1d(channels, channels, 1, 1, 0))
-        self.input_conv = weight_norm(nn.Conv1d(channels, channels * 2, 3, 1, padding='same', dilation=dilation))
+        self.input_conv = weight_norm(nn.Conv1d(channels, channels * 2, 3, 1, padding='same', dilation=dilation, padding_mode='reflect'))
         self.channels = channels 
         self.output_conv = weight_norm(nn.Conv1d(channels, channels, 1, 1, 0))
     
@@ -72,9 +72,10 @@ class ContentEncoderResBlock(nn.Module):
 class ContentEncoderResStack(nn.Module):
     def __init__(self, channels, num_blocks=4, dilation=3):
         super().__init__()
-        self.layers = nn.ModuleList(
-                [ContentEncoderResBlock(channels, dilation) for _ in range(num_blocks)])
-    
+        self.layers = nn.ModuleList([])
+        for i in range(num_blocks):
+            self.layers.append(ContentEncoderResBlock(channels, dilation=3**i))
+
     def forward(self, x):
         for layer in self.layers:
             x = layer(x)
@@ -86,21 +87,19 @@ class ContentEncoder(nn.Module):
         super().__init__()
         self.res_blocks = nn.ModuleList([])
         self.downsamples = nn.ModuleList([])
-        for i, c in enumerate(channels):
-            self.res_blocks.append(ContentEncoderResStack(c, 3 ** i))
+        for c in channels:
+            self.res_blocks.append(ContentEncoderResStack(c))
         for c1, c2, rate in zip(channels, channels[1:] + [512], downsample_rates):
             self.downsamples.append(
                     weight_norm(
-                        nn.Conv1d(c1, c2, rate*2, rate, rate//2)))
-        self.input_layer = weight_norm(nn.Conv1d(1, 32, 7, 1, 3))
-        self.output_layers = nn.Sequential(
-                weight_norm(nn.Conv1d(512, 512, 7, 1, 3)),
-                nn.GELU(),
-                weight_norm(nn.Conv1d(512, 4, 7, 1, 3)))
+                        nn.Conv1d(c1, c2, rate*2, rate, rate//2, padding_mode='reflect')))
+        self.input_layer = weight_norm(nn.Conv1d(1, 32, 7, 1, 3, padding_mode='reflect'))
+        self.output_layers = nn.Sequential(nn.GELU(),
+                weight_norm(nn.Conv1d(512, 4, 7, 1, 3, padding_mode='reflect')))
         self.apply(initialize_weight)
 
     def forward(self, x):
-        x = padding_wave(x)
+        x = pad_wave(x)
         x = x.unsqueeze(1)
         x = self.input_layer(x)
         x = F.gelu(x)
@@ -117,7 +116,7 @@ class GeneratorResBlock(nn.Module):
     def __init__(self, channels, d_spk=128, dilation=3):
         super().__init__()
         self.res_conv = weight_norm(nn.Conv1d(channels, channels, 1, 1, 0))
-        self.input_conv = weight_norm(nn.Conv1d(channels, channels * 2, 3, 1, padding='same', dilation=dilation))
+        self.input_conv = weight_norm(nn.Conv1d(channels, channels * 2, 3, 1, padding='same', dilation=dilation, padding_mode='reflect'))
         self.spk_conv = weight_norm(nn.Conv1d(d_spk, channels * 2, 1, 1, 0))
         self.channels = channels 
         self.output_conv = weight_norm(nn.Conv1d(channels, channels, 1, 1, 0))
@@ -133,8 +132,9 @@ class GeneratorResBlock(nn.Module):
 class GeneratorResStack(nn.Module):
     def __init__(self, channels, d_spk=128, num_blocks=4, dilation=3):
         super().__init__()
-        self.layers = nn.ModuleList(
-                [GeneratorResBlock(channels, d_spk, dilation) for _ in range(num_blocks)])
+        self.layers = nn.ModuleList([])
+        for i in range(num_blocks):
+            self.layers.append(GeneratorResBlock(channels, d_spk, dilation=3**i))
 
     def forward(self, x, spk):
         for layer in self.layers:
@@ -147,20 +147,20 @@ class Generator(nn.Module):
         super().__init__()
         self.res_blocks = nn.ModuleList([])
         self.upsamples = nn.ModuleList([])
-        for i, c in enumerate(channels):
-            self.res_blocks.append(GeneratorResStack(c, 128, 3 ** i))
+        for c in channels:
+            self.res_blocks.append(GeneratorResStack(c))
         for c1, c2, rate in zip(channels, [512] + channels[:-1], upsample_rates):
             self.upsamples.append(
                     weight_norm(
                         nn.ConvTranspose1d(c2, c1, rate*2, rate, rate//2)))
         self.input_layers = nn.Sequential(
-                weight_norm(
-                    nn.Conv1d(4, 512, 7, 1, 3)),
                 nn.GELU(),
                 weight_norm(
-                    nn.Conv1d(512, 512, 7, 1, 3)))
-        self.output_layer = weight_norm(
-                nn.Conv1d(32, 1, 7, 1, 3))
+                    nn.Conv1d(4, 512, 7, 1, 3, padding_mode='reflect')))
+        self.output_layer = nn.Sequential (
+                nn.GELU(),
+                weight_norm(
+                    nn.Conv1d(32, 1, 7, 1, 3, padding_mode='reflect')))
         self.apply(initialize_weight)
 
     def forward(self, x, spk):
@@ -247,7 +247,7 @@ class MultiScaleDiscriminator(nn.Module):
             self,
             segments=[1, 1, 1],
             channels=[32, 64, 128, 256],
-            kernel_sizes=[15, 15, 15],
+            kernel_sizes=[41, 41, 41],
             strides=[4, 4, 4, 4],
             groups=[1, 1, 1, 1],
             pools=[1, 2, 4]

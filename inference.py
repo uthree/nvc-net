@@ -6,6 +6,10 @@ import torchaudio
 from model import VoiceConvertor
 from torchaudio.functional import resample as resample
 
+import matplotlib.pyplot as plt
+import torch.nn.functional as F
+
+
 parser = argparse.ArgumentParser(description="Inference")
 
 parser.add_argument('-d', '--device', default='cpu', choices=['cpu', 'cuda', 'mps'],
@@ -34,7 +38,7 @@ wf = wf.to(device)
 wf = resample(wf, sr, 22050)
 
 mean, logvar = Es(wf)
-spk = mean + torch.randn(*logvar.shape, device=logvar.device)
+spk = mean + torch.randn(*logvar.shape, device=logvar.device) * torch.exp(logvar)
 
 if not os.path.exists(args.output):
     os.mkdir(args.output)
@@ -46,6 +50,8 @@ for i, fname in enumerate(os.listdir(args.input)):
         wf = resample(wf, sr, 22050)
         
         z = Ec(wf)
+        plt.imshow(F.interpolate(z.unsqueeze(1), size=(64, z.shape[2])).squeeze(1).squeeze(0).cpu())
+        plt.savefig(os.path.join(args.output , f"{i}.png"))
         wf = G(z, spk)
 
         wf = resample(wf, 22050, sr)
