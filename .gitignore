@@ -169,4 +169,5 @@ cython_debug/
 
 # model
 *.pt
+*.png
 
