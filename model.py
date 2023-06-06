@@ -17,12 +17,6 @@ def initialize_weight(model):
         nn.init.normal_(model.weight, mean=0.0, std=0.02)
 
 
-def normalize(x, dim=(1), eps=1e-6):
-    std = torch.std(x, dim, keepdim=True) + eps
-    mean = torch.mean(x, dim, keepdim=True)
-    return (x - mean) / std
-
-
 class SpeakerEncoderResBlock(nn.Module):
     def __init__(self, input_channels, output_channels):
         super().__init__()
@@ -308,7 +302,7 @@ class Discriminator(nn.Module):
 
 
 class MelSpectrogramLoss(nn.Module):
-    def __init__(self, sample_rate=22050, n_ffts=[512, 1024, 2048], n_mels=80, normalized=True):
+    def __init__(self, sample_rate=22050, n_ffts=[512, 1024, 2048], n_mels=80, normalized=False):
         super().__init__()
         self.to_mels = nn.ModuleList([])
         for n_fft in n_ffts:
