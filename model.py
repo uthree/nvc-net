@@ -227,6 +227,10 @@ class ScaleDiscriminator(nn.Module):
             self.output_layers.append(
                     norm_f(
                         nn.Conv1d(channels[i+1], 1, 1, 1, 0)))
+        self.last_layers = nn.Sequential(
+                norm_f(nn.Conv1d(channels[-1], 1024, 5, 1, 2)),
+                nn.LeakyReLU(0.2),
+                norm_f(nn.Conv1d(1024, 1, 3, 1, 1)))
 
     def forward(self, x):
         x = x.unsqueeze(1)
@@ -238,7 +242,9 @@ class ScaleDiscriminator(nn.Module):
             x = layer(x)
             x = F.leaky_relu(x, 0.2)
             logits.append(output_layer(x))
+        logits.append(self.last_layers(x))
         return logits
+
 
     def feat(self, x):
         x = x.unsqueeze(1)
@@ -257,10 +263,10 @@ class MultiScaleDiscriminator(nn.Module):
     def __init__(
             self,
             segments=[1, 1, 1],
-            channels=[32, 64, 128, 256],
+            channels=[64, 256, 1024, 1024],
             kernel_sizes=[41, 41, 41],
             strides=[4, 4, 4, 4],
-            groups=[1, 1, 1, 1],
+            groups=[1, 4, 16, 16],
             pools=[1, 2, 4]
             ):
         super().__init__()
