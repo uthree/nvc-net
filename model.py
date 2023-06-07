@@ -17,6 +17,12 @@ def initialize_weight(model):
         nn.init.normal_(model.weight, mean=0.0, std=0.02)
 
 
+def normalize(x, dim=(2), eps=1e-6):
+    std = torch.std(x, dim=dim, keepdim=True) + eps
+    mean = torch.mean(x, dim=dim, keepdim=True)
+    return (x - mean) / std
+
+
 class SpeakerEncoderResBlock(nn.Module):
     def __init__(self, input_channels, output_channels):
         super().__init__()
@@ -91,16 +97,16 @@ class ContentEncoderResStack(nn.Module):
 
 
 class ContentEncoder(nn.Module):
-    def __init__(self, channels=[32, 64, 128, 256], downsample_rates=[2, 2, 8, 8]):
+    def __init__(self, channels=[32, 64, 128, 256], downsample_ratios=[2, 2, 8, 8]):
         super().__init__()
         self.res_blocks = nn.ModuleList([])
         self.downsamples = nn.ModuleList([])
         for c in channels:
             self.res_blocks.append(ContentEncoderResStack(c))
-        for c1, c2, rate in zip(channels, channels[1:] + [512], downsample_rates):
+        for c1, c2, ratio in zip(channels, channels[1:] + [512], downsample_ratios):
             self.downsamples.append(
                     weight_norm(
-                        nn.Conv1d(c1, c2, rate*2, rate, rate//2, padding_mode='reflect')))
+                        nn.Conv1d(c1, c2, ratio*2, ratio, ratio//2, padding_mode='reflect')))
         self.input_layer = weight_norm(nn.Conv1d(1, 32, 7, 1, 3, padding_mode='reflect'))
         self.output_layers = nn.Sequential(
                 nn.GELU(),
@@ -153,16 +159,16 @@ class GeneratorResStack(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self, channels=[256, 128, 64, 32], upsample_rates=[8, 8, 2, 2]):
+    def __init__(self, channels=[256, 128, 64, 32], upsample_ratios=[8, 8, 2, 2]):
         super().__init__()
         self.res_blocks = nn.ModuleList([])
         self.upsamples = nn.ModuleList([])
         for c in channels:
             self.res_blocks.append(GeneratorResStack(c))
-        for c1, c2, rate in zip(channels, [512] + channels[:-1], upsample_rates):
+        for c1, c2, ratio in zip(channels, [512] + channels[:-1], upsample_ratios):
             self.upsamples.append(
                     weight_norm(
-                        nn.ConvTranspose1d(c2, c1, rate*2, rate, rate//2)))
+                        nn.ConvTranspose1d(c2, c1, ratio*2, ratio, ratio//2)))
         self.input_layers = nn.Sequential(
                 nn.GELU(),
                 weight_norm(nn.Conv1d(4, 512, 7, 1, 3, padding_mode='reflect')),
