@@ -20,7 +20,7 @@ def initialize_weight(model):
 class SpeakerEncoderResBlock(nn.Module):
     def __init__(self, input_channels, output_channels):
         super().__init__()
-        self.res_conv = weight_norm(nn.Conv1d(input_channels, output_channels, 1, 1, 0))
+        self.res_conv = weight_norm(nn.Conv1d(input_channels, output_channels, 1, 1, 0, bias=False))
         self.pool = nn.AvgPool1d(2)
         self.conv1 = weight_norm(nn.Conv1d(input_channels, input_channels, 3, 1, 1))
         self.relu = nn.LeakyReLU(0.2)
@@ -106,7 +106,7 @@ class ContentEncoder(nn.Module):
                 nn.GELU(),
                 weight_norm(nn.Conv1d(512, 512, 7, 1, 3, padding_mode='reflect')),
                 nn.GELU(),
-                weight_norm(nn.Conv1d(512, 4, 7, 1, 3, padding_mode='reflect')))
+                weight_norm(nn.Conv1d(512, 4, 7, 1, 3, padding_mode='reflect', bias=False)))
         self.apply(initialize_weight)
 
     def forward(self, x):
@@ -117,8 +117,7 @@ class ContentEncoder(nn.Module):
             x = r(x)
             x = d(x)
         x = self.output_layers(x)
-        std = torch.std(x, dim=1, keepdim=True) + 1e-4
-        x = x / std
+        x = x / torch.sum(x**2 + 1e-6, dim=1, keepdim=True) ** 0.5
         return x
 
 
@@ -323,6 +322,7 @@ class MelSpectrogramLoss(nn.Module):
         for to_mel in self.to_mels:
             to_mel = to_mel.to(real.device)
             with torch.no_grad():
-                real_mel = to_mel(real)
-            loss += F.l1_loss(to_mel(fake), real_mel).mean() / len(self.to_mels)
+                real_mel = torch.log10(to_mel(real) + 1e-6)
+            fake_mel = torch.log10(to_mel(fake) + 1e-6)
+            loss += F.l1_loss(fake_mel, real_mel).mean() / len(self.to_mels)
         return loss
