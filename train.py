@@ -103,6 +103,9 @@ for epoch in range(args.epoch):
             loss_C = loss_adv + loss_rec * weight_rec + weight_con * loss_con + weight_kl * loss_kl
         scaler.scale(loss_C).backward()
         torch.nn.utils.clip_grad_norm_(C.parameters(), 1.0, 2.0)
+        if torch.any(torch.isnan(loss_C)):
+            exit()
+
         scaler.step(OptC)
         
         OptD.zero_grad()
