@@ -78,7 +78,7 @@ class ContentEncoderResBlock(nn.Module):
 
 
 class ContentEncoderResStack(nn.Module):
-    def __init__(self, channels, num_blocks=4, dilation=3):
+    def __init__(self, channels, num_blocks=4):
         super().__init__()
         self.layers = nn.ModuleList([])
         for i in range(num_blocks):
@@ -140,7 +140,7 @@ class GeneratorResBlock(nn.Module):
 
 
 class GeneratorResStack(nn.Module):
-    def __init__(self, channels, d_spk=128, num_blocks=4, dilation=3):
+    def __init__(self, channels, d_spk=128, num_blocks=4):
         super().__init__()
         self.layers = nn.ModuleList([])
         for i in range(num_blocks):
@@ -153,7 +153,7 @@ class GeneratorResStack(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self, channels=[256, 128, 64, 32], upsample_rates=[2, 2, 8, 8]):
+    def __init__(self, channels=[256, 128, 64, 32], upsample_rates=[8, 8, 2, 2]):
         super().__init__()
         self.res_blocks = nn.ModuleList([])
         self.upsamples = nn.ModuleList([])
