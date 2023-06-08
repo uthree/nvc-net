@@ -123,7 +123,7 @@ class ContentEncoder(nn.Module):
             x = r(x)
             x = d(x)
         x = self.output_layers(x)
-        x = x / torch.sum(x**2 + 1e-6, dim=1, keepdim=True) ** 0.5
+        x = x / (torch.sum(x**2 + 1e-6, dim=2, keepdim=True) ** 0.5)
         return x
 
 
@@ -206,7 +206,6 @@ class ScaleDiscriminator(nn.Module):
             norm_type='spectral',
             kernel_size=11,
             strides=[1, 1, 1],
-            dropout_rate=0.1,
             groups=[],
             pool = 1
             ):
