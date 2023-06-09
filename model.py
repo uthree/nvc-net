@@ -17,10 +17,10 @@ def initialize_weight(model):
         nn.init.normal_(model.weight, mean=0.0, std=0.02)
 
 
-#def normalize(x, dim=(2), eps=1e-6):
-#    std = torch.std(x, dim=dim, keepdim=True) + eps
-#    mean = torch.mean(x, dim=dim, keepdim=True)
-#    return (x - mean) / std
+def normalize(x, dim=(2), eps=1e-6):
+    std = torch.std(x, dim=dim, keepdim=True) + eps
+    mean = torch.mean(x, dim=dim, keepdim=True)
+    return (x - mean) / std
 
 
 class SpeakerEncoderResBlock(nn.Module):
@@ -123,7 +123,8 @@ class ContentEncoder(nn.Module):
             x = r(x)
             x = d(x)
         x = self.output_layers(x)
-        x = x / (torch.sum(x**2 + 1e-6, dim=2, keepdim=True) ** 0.5)
+        x = x / (torch.sum(x**2 + 1e-6, dim=1, keepdim=True) ** 0.5)
+        #x = normalize(x) # experimental
         return x
 
 
@@ -266,16 +267,15 @@ class ScaleDiscriminator(nn.Module):
 class MultiScaleDiscriminator(nn.Module):
     def __init__(
             self,
-            segments=[1, 1, 1],
             channels=[64, 256, 1024, 1024],
             kernel_sizes=[41, 41, 41],
             strides=[4, 4, 4, 4],
             groups=[1, 4, 16, 16],
-            pools=[1, 2, 4]
+            pools=[1, 4, 16]
             ):
         super().__init__()
         self.sub_discriminators = nn.ModuleList([])
-        for i, (k, sg, p) in enumerate(zip(kernel_sizes, segments, pools)):
+        for i, (k, p) in enumerate(zip(kernel_sizes,  pools)):
             self.sub_discriminators.append(
                     ScaleDiscriminator(channels, 'weight', k, strides, groups=groups, pool=p))
 
