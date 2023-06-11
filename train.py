@@ -58,7 +58,7 @@ ds = WaveFileDirectory(
         length=32768,
         max_files=args.maxdata)
 
-dl = torch.utils.data.DataLoader(ds, batch_size=args.batch*2, shuffle=True)
+dl = torch.utils.data.DataLoader(ds, batch_size=args.batch, shuffle=True)
 
 OptC = optim.Adam(C.parameters(), lr=args.learning_rate, betas=(0.5, 0.9))
 OptD = optim.Adam(D.parameters(), lr=args.learning_rate, betas=(0.5, 0.9))
@@ -79,19 +79,16 @@ for epoch in range(args.epoch):
     bar = tqdm(total=len(ds))
     for batch, wave in enumerate(dl):
         N = wave.shape[0]
-        if N % 2 != 0:
-            continue
         wave = wave.to(device)
         # Data Augmentation
         wave = wave * (torch.rand(N, 1,device=device) * 0.75 + 0.25)
-        wave_src, wave_tgt = wave.chunk(2, dim=0)
-        
+        wave_src = wave
+
         OptC.zero_grad()
         with torch.cuda.amp.autocast(enabled=args.fp16):
             src_mean, src_logvar = Es(wave_src)
             z_src = src_mean + torch.exp(src_logvar) * torch.rand_like(src_logvar)
-            tgt_mean, tgt_logvar = Es(wave_tgt)
-            z_tgt = tgt_mean + torch.exp(tgt_logvar) * torch.rand_like(tgt_logvar)
+            z_tgt = torch.randn_like(z_src)
 
             c = Ec(wave_src)
             wave_rec = G(c, z_src)
