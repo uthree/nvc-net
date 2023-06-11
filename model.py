@@ -358,6 +358,7 @@ class ASREncoder(nn.Module):
         self.pos_emb = PositionalEncoding(output_channels)
 
     def forward(self, x):
+        x = F.dropout(x, p=0.5)
         x = self.conv(x)
         x = x.transpose(1, 2)
         x = self.pos_emb(x)
