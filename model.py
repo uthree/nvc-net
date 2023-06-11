@@ -17,7 +17,7 @@ def initialize_weight(model):
         nn.init.normal_(model.weight, mean=0.0, std=0.02)
 
 
-def normalize(x, dim=(2), eps=1e-6):
+def instance_norm(x, dim=(2), eps=1e-6):
     std = torch.std(x, dim=dim, keepdim=True) + eps
     mean = torch.mean(x, dim=dim, keepdim=True)
     return (x - mean) / std
@@ -115,7 +115,7 @@ class ContentEncoder(nn.Module):
                 weight_norm(nn.Conv1d(512, 4, 7, 1, 3, padding_mode='reflect', bias=False)))
         self.apply(initialize_weight)
 
-    def forward(self, x):
+    def forward(self, x, normalize=True):
         x = pad_wave(x)
         x = x.unsqueeze(1)
         x = self.input_layer(x)
@@ -123,8 +123,9 @@ class ContentEncoder(nn.Module):
             x = r(x)
             x = d(x)
         x = self.output_layers(x)
-        #x = x / (torch.sum(x**2 + 1e-6, dim=1, keepdim=True) ** 0.5)
-        x = normalize(x)
+        x = x / (torch.sum(x**2 + 1e-6, dim=1, keepdim=True) ** 0.5)
+        if normalize:
+            x = instance_norm(x)
         return x
 
 
