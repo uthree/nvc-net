@@ -38,10 +38,14 @@ wf = wf.to(device)
 wf = resample(wf, sr, 22050)
 
 mean, logvar = Es(wf)
-spk = mean + torch.exp(logvar) * torch.randn(*logvar.shape, device=logvar.device) * torch.exp(logvar)
+spk = mean #+ torch.exp(logvar) * torch.randn(*logvar.shape, device=logvar.device) * torch.exp(logvar)
 
 if not os.path.exists(args.output):
     os.mkdir(args.output)
+
+plt.imshow(spk.reshape(16, 8).detach().cpu().numpy())
+plt.savefig(os.path.join(args.output , f"speaker.png"))
+
 
 for i, fname in enumerate(os.listdir(args.input)):
     print(f"Converting {fname}")
