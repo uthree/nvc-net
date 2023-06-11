@@ -68,10 +68,6 @@ L1 = nn.L1Loss()
 BCE = nn.BCEWithLogitsLoss()
 scaler = torch.cuda.amp.GradScaler(enabled=args.fp16)
 
-pitch_shifts = [
-        torchaudio.transforms.PitchShift(22050, 12).to(device),
-        torchaudio.transforms.PitchShift(22050, -12).to(device)]
-
 C.train()
 D.train()
 if args.generator_only:
