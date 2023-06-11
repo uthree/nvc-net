@@ -327,7 +327,7 @@ class MelSpectrogramLoss(nn.Module):
         for to_mel in self.to_mels:
             to_mel = to_mel.to(real.device)
             with torch.no_grad():
-                real_mel = torch.log10(to_mel(real) + 1e-6)
-            fake_mel = torch.log10(to_mel(fake) + 1e-6)
+                real_mel = torch.log(to_mel(real) * 1e4 + 1.0)
+            fake_mel = torch.log(to_mel(fake) * 1e4 + 1.0)
             loss += F.l1_loss(fake_mel, real_mel).mean() / len(self.to_mels)
         return loss
