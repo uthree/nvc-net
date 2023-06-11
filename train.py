@@ -69,6 +69,10 @@ L1 = nn.L1Loss()
 BCE = nn.BCEWithLogitsLoss()
 scaler = torch.cuda.amp.GradScaler(enabled=args.fp16)
 
+pitch_shifts = [
+        torchaudio.transforms.PitchShift(22050, 12).to(device),
+        torchaudio.transforms.PitchShift(22050, -12).to(device)]
+
 C.train()
 D.train()
 if args.generator_only:
@@ -110,6 +114,8 @@ for epoch in range(args.epoch):
                 loss_adv += BCE(logit, torch.zeros_like(logit)) / len(logits)
 
             loss_con = ((Ec(wave_fake) - c) ** 2).mean()
+            pitch_shift = random.choice(pitch_shifts)
+            loss_con += ((Ec(pitch_shift(wave_src)) - c) ** 2).mean() # Pitch Shift Content Preserversion (Experimental)
 
             loss_kl = (-1 - src_logvar + torch.exp(src_logvar) + src_mean ** 2).mean()
             fake_mean, fake_logvar = Es(wave_fake)
