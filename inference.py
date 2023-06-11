@@ -20,7 +20,6 @@ parser.add_argument('-o', '--output', default='./outputs',
                     help="Output directory")
 parser.add_argument('-t', '--target', default='./target.wav',
                     help="Target voice")
-parser.add_argument('-ps', '--pitch-shift', default=0, type=int)
 
 args = parser.parse_args()
 
@@ -44,16 +43,13 @@ spk = mean + torch.exp(logvar) * torch.randn(*logvar.shape, device=logvar.device
 if not os.path.exists(args.output):
     os.mkdir(args.output)
 
-ps = args.pitch_shift
-pitch_shift = torchaudio.transforms.PitchShift(22050, ps).to(device)
-
 for i, fname in enumerate(os.listdir(args.input)):
     print(f"Converting {fname}")
     with torch.no_grad():
         wf, sr = torchaudio.load(os.path.join(args.input, fname))
         wf = resample(wf, sr, 22050)
         
-        z = Ec(pitch_shift(wf))
+        z = Ec(wf)
         plt.imshow(F.interpolate(z.unsqueeze(1), size=(64, z.shape[2])).squeeze(1).squeeze(0).cpu())
         plt.savefig(os.path.join(args.output , f"{i}.png"))
         wf = G(z, spk)

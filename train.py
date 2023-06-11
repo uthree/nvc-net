@@ -38,6 +38,7 @@ parser.add_argument('-fp16', default=False, type=bool)
 parser.add_argument('-m', '--maxdata', default=-1, type=int, help="max dataset size")
 parser.add_argument('-lr', '--learning-rate', default=1e-4, type=float)
 parser.add_argument('--freeze-encoder', default=False, type=bool)
+parser.add_argument('--save-frequency', default=100, type=int)
 
 args = parser.parse_args()
 device = torch.device(args.device)
@@ -131,7 +132,7 @@ for epoch in range(args.epoch):
 
         scaler.update()
 
-        if batch % 200 == 0:
+        if batch % args.save_frequency == 0:
             save_models(C, D)
         tqdm.write(f"Adv.: {loss_adv.item():.4f}, F.M.: {loss_fm.item():.4f}, Mel.: {loss_mel.item():.4f}, K.L.: {loss_kl.item():.4f}, Con. {loss_con.item():.4f}")
         bar.set_description(f"C: {loss_C.item():.4f}, D: {loss_D.item():.4f}")

@@ -39,6 +39,7 @@ parser.add_argument('-b', '--batch', default=2, type=int)
 parser.add_argument('-fp16', default=False, type=bool)
 parser.add_argument('-m', '--maxdata', default=-1, type=int, help="max dataset size")
 parser.add_argument('-lr', '--learning-rate', default=1e-4, type=float)
+parser.add_argument('--freeze-encoder', default=False, type=bool)
 
 args = parser.parse_args()
 device = torch.device(args.device)
@@ -76,7 +77,12 @@ for epoch in range(args.epoch):
 
         optimizer.zero_grad()
         with torch.cuda.amp.autocast(enabled=args.fp16):
-            mem = Easr(Ec(wf))
+            if args.freeze_encoder:
+                with torch.no_grad():
+                    c = Ec(wf)
+            else:
+                c= Ec(wf)
+            mem = Easr(c)
             dec_out = Dasr(dec_in, mem, tgt_mask=tgt_mask, tgt_key_padding_mask=(dec_in != 0))
             loss_asr = CSE(
                     torch.flatten(dec_out, start_dim=0, end_dim=1),
