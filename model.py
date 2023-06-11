@@ -18,7 +18,7 @@ def initialize_weight(model):
         nn.init.normal_(model.weight, mean=0.0, std=0.02)
 
 
-def instance_norm(x, dim=(2), eps=1e-6):
+def instance_norm(x, dim=(1, 2), eps=1e-6):
     std = torch.std(x, dim=dim, keepdim=True) + eps
     mean = torch.mean(x, dim=dim, keepdim=True)
     return (x - mean) / std
@@ -127,6 +127,7 @@ class ContentEncoder(nn.Module):
         x = x / (torch.sum(x**2 + 1e-6, dim=1, keepdim=True) ** 0.5)
         if normalize:
             x = instance_norm(x)
+        length = x.shape[2]
         return x
 
 

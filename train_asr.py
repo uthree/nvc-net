@@ -63,7 +63,9 @@ for epoch in range(args.epoch):
     for batch, (wf, phonemes) in enumerate(dl):
         N = wf.shape[0]
         
+        amp = torch.rand(N, 1).to(device) * 0.75 + 0.25
         wf = wf.to(device)
+        wf = wf * amp
         phonemes = phonemes.to(device)
 
         sz = phonemes.shape[1]
