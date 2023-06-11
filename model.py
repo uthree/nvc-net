@@ -306,7 +306,7 @@ class Discriminator(nn.Module):
         fake_feat = self.MSD.feat(fake)
         loss = 0
         for r, f in zip(real_feat, fake_feat):
-            loss += (f-r).abs().mean() / len(real_feat)
+            loss += (f-r).abs().mean()
         return loss
 
 
