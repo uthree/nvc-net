@@ -37,7 +37,7 @@ parser.add_argument('-b', '--batch', default=4, type=int)
 parser.add_argument('-fp16', default=False, type=bool)
 parser.add_argument('-m', '--maxdata', default=-1, type=int, help="max dataset size")
 parser.add_argument('-lr', '--learning-rate', default=1e-4, type=float)
-parser.add_argument('--generator-only', default=False, type=bool)
+parser.add_argument('--freeze-encoder', default=False, type=bool)
 
 args = parser.parse_args()
 device = torch.device(args.device)
@@ -70,12 +70,9 @@ scaler = torch.cuda.amp.GradScaler(enabled=args.fp16)
 
 C.train()
 D.train()
-if args.generator_only:
+if args.freeze_encoder:
     for param in Ec.parameters():
         param.requires_grad=False
-    for param in Es.parameters():
-        param.requires_grad=False
-
 
 for epoch in range(args.epoch):
     tqdm.write(f"Epoch #{epoch}")
