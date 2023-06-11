@@ -1,5 +1,6 @@
 import argparse
 import os
+import random
 
 import torch
 import torch.nn as nn
@@ -51,6 +52,7 @@ weight_kl = 0.02
 weight_con = 10.0
 weight_rec = 10.0
 weight_mel = 1.0
+weight_ps = 10.0
 
 ds = WaveFileDirectory(
         [args.dataset_path],
@@ -91,9 +93,9 @@ for epoch in range(args.epoch):
         OptC.zero_grad()
         with torch.cuda.amp.autocast(enabled=args.fp16):
             src_mean, src_logvar = Es(wave_src)
-            z_src = src_mean + torch.exp(src_logvar) * torch.randn(*src_logvar.shape, device=src_logvar.device)
+            z_src = src_mean + torch.exp(src_logvar) * torch.rand_like(src_logvar)
             tgt_mean, tgt_logvar = Es(wave_tgt)
-            z_tgt = tgt_mean + torch.exp(tgt_logvar) * torch.randn(*tgt_logvar.shape, device=tgt_logvar.device)
+            z_tgt = tgt_mean + torch.exp(tgt_logvar) * torch.rand_like(tgt_logvar)
 
             c = Ec(wave_src)
             wave_rec = G(c, z_src)
@@ -106,10 +108,13 @@ for epoch in range(args.epoch):
             logits = D.logits(wave_fake)
             for logit in logits:
                 loss_adv += BCE(logit, torch.zeros_like(logit)) / len(logits)
-            loss_con = ((Ec(wave_fake) - c) ** 2).mean()
-            loss_kl = (-1 - src_logvar + torch.exp(src_logvar) + src_mean ** 2).mean() +\
-                    (-1 - tgt_logvar + torch.exp(tgt_logvar) + src_mean ** 2).mean()
-            loss_C = loss_adv + loss_rec * weight_rec + weight_con * loss_con + weight_kl * loss_kl
+
+            loss_con = ((Ec(wave_fake.detach()) - c) ** 2).mean()
+
+            loss_kl = (-1 - src_logvar + torch.exp(src_logvar) + src_mean ** 2).mean()
+            fake_mean, fake_logvar = Es(wave_fake)
+            
+            loss_C = loss_adv + loss_rec * weight_rec + weight_con * loss_con + weight_kl * loss_kl 
         scaler.scale(loss_C).backward()
         torch.nn.utils.clip_grad_norm_(C.parameters(), 1.0, 2.0)
         if torch.any(torch.isnan(loss_C)):
@@ -133,7 +138,7 @@ for epoch in range(args.epoch):
 
         scaler.update()
 
-        if batch % 100 == 0:
+        if batch % 200 == 0:
             save_models(C, D)
         tqdm.write(f"Adv.: {loss_adv.item():.4f}, F.M.: {loss_fm.item():.4f}, Mel.: {loss_mel.item():.4f}, K.L.: {loss_kl.item():.4f}, Con. {loss_con.item():.4f}")
         bar.set_description(f"C: {loss_C.item():.4f}, D: {loss_D.item():.4f}")
