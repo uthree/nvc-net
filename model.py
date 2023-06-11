@@ -270,7 +270,7 @@ class MultiScaleDiscriminator(nn.Module):
             kernel_sizes=[41, 41, 41],
             strides=[4, 4, 4, 4],
             groups=[1, 4, 16, 16],
-            pools=[1, 4, 16]
+            pools=[1, 2, 4]
             ):
         super().__init__()
         self.sub_discriminators = nn.ModuleList([])
