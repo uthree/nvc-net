@@ -115,7 +115,7 @@ class ContentEncoder(nn.Module):
                 weight_norm(nn.Conv1d(512, 4, 7, 1, 3, padding_mode='reflect', bias=False)))
         self.apply(initialize_weight)
 
-    def forward(self, x, normalize=True):
+    def forward(self, x, normalize=False):
         x = pad_wave(x)
         x = x.unsqueeze(1)
         x = self.input_layer(x)
