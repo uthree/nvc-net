@@ -32,7 +32,7 @@ parser = argparse.ArgumentParser(description="Train NVC-Net")
 
 parser.add_argument('dataset_path')
 parser.add_argument('-d', '--device', default='cpu')
-parser.add_argument('-e', '--epoch', default=60, type=int)
+parser.add_argument('-e', '--epoch', default=6000, type=int)
 parser.add_argument('-b', '--batch', default=4, type=int)
 parser.add_argument('-fp16', default=False, type=bool)
 parser.add_argument('-m', '--maxdata', default=-1, type=int, help="max dataset size")
