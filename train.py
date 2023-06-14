@@ -113,7 +113,7 @@ for epoch in range(args.epoch):
             
             loss_con = ((Ec(wave_fake) - c) ** 2).mean()
 
-            loss_kl = (-1 - src_logvar + torch.exp(src_logvar) + src_mean ** 3).mean()
+            loss_kl = (-1 - src_logvar + torch.exp(src_logvar) + src_mean ** 2).mean()
             fake_mean, fake_logvar = Es(wave_fake)
             
             loss_C = loss_adv + loss_rec * weight_rec + weight_con * loss_con + weight_kl * loss_kl 
