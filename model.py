@@ -292,7 +292,7 @@ class MultiScaleDiscriminator(nn.Module):
         return logits
 
     def feat(self, x):
-        feats = []
+        feats = [x]
         for sd in self.sub_discriminators:
             feats = feats + sd.feat(x)
         return feats
