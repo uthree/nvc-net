@@ -28,17 +28,23 @@ def save_models(C, D):
     torch.save(D.state_dict(), "discriminator.pt")
     print("saved models")
 
+
+def random_flip(x):
+    scale = torch.randint(low=0, high=1, size=(x.shape[0], 1), device=x.device) * 2 - 1
+    return x * scale
+
 parser = argparse.ArgumentParser(description="Train NVC-Net")
 
 parser.add_argument('dataset_path')
 parser.add_argument('-d', '--device', default='cpu')
 parser.add_argument('-e', '--epoch', default=6000, type=int)
-parser.add_argument('-b', '--batch', default=4, type=int)
+parser.add_argument('-b', '--batch', default=8, type=int)
 parser.add_argument('-fp16', default=False, type=bool)
 parser.add_argument('-m', '--maxdata', default=-1, type=int, help="max dataset size")
 parser.add_argument('-lr', '--learning-rate', default=1e-4, type=float)
 parser.add_argument('--freeze-encoder', default=False, type=bool)
 parser.add_argument('--save-frequency', default=100, type=int)
+parser.add_argument('-gacc', '--gradient-accumulation', type=int, default=1)
 
 args = parser.parse_args()
 device = torch.device(args.device)
@@ -54,6 +60,8 @@ weight_con = 10.0
 weight_rec = 10.0
 weight_mel = 1.0
 
+grad_acc = args.gradient_accumulation
+
 ds = WaveFileDirectory(
         [args.dataset_path],
         length=32768,
@@ -65,7 +73,6 @@ OptC = optim.Adam(C.parameters(), lr=args.learning_rate, betas=(0.5, 0.9))
 OptD = optim.Adam(D.parameters(), lr=args.learning_rate, betas=(0.5, 0.9))
 
 mel_loss = MelSpectrogramLoss().to(device)
-L1 = nn.L1Loss()
 BCE = nn.BCEWithLogitsLoss()
 scaler = torch.cuda.amp.GradScaler(enabled=args.fp16)
 
@@ -83,18 +90,19 @@ for epoch in range(args.epoch):
         wave = wave.to(device)
         # Data Augmentation
         wave = wave * (torch.rand(N, 1,device=device) * 0.75 + 0.25)
+        wave = random_flip(wave)
         wave_src = wave
+        wave_tgt = torch.roll(wave, dims=0, shifts=1)
 
-        OptC.zero_grad()
         with torch.cuda.amp.autocast(enabled=args.fp16):
             src_mean, src_logvar = Es(wave_src)
             z_src = src_mean + torch.exp(src_logvar) * torch.rand_like(src_logvar)
-            z_tgt = torch.randn_like(z_src)
+            z_tgt = torch.roll(z_src, dims=0, shifts=1)
 
             c = Ec(wave_src)
             wave_rec = G(c, z_src)
 
-            loss_fm = D.feat_loss(wave_rec, wave_src)
+            loss_fm = D.feat_loss(wave_rec, random_flip(wave_src))
             loss_mel = mel_loss(wave_rec, wave_src)
             loss_rec = loss_fm + weight_mel * loss_mel
             wave_fake = G(c, z_tgt)
@@ -102,10 +110,10 @@ for epoch in range(args.epoch):
             logits = D.logits(wave_fake)
             for logit in logits:
                 loss_adv += BCE(logit, torch.zeros_like(logit)) / len(logits)
+            
+            loss_con = ((Ec(wave_fake) - c.detach()) ** 2).mean()
 
-            loss_con = ((Ec(wave_fake) - c) ** 2).mean()
-
-            loss_kl = (-1 - src_logvar + torch.exp(src_logvar) + src_mean ** 2).mean()
+            loss_kl = (-1 - src_logvar + torch.exp(src_logvar) + src_mean ** 3).mean()
             fake_mean, fake_logvar = Es(wave_fake)
             
             loss_C = loss_adv + loss_rec * weight_rec + weight_con * loss_con + weight_kl * loss_kl 
@@ -113,19 +121,21 @@ for epoch in range(args.epoch):
         torch.nn.utils.clip_grad_norm_(C.parameters(), 1.0, 2.0)
         if torch.any(torch.isnan(loss_C)):
             exit()
-
-        scaler.step(OptC)
+        
+        if batch % grad_acc == 0:
+            scaler.step(OptC)
+            OptC.zero_grad()
         
         OptD.zero_grad()
-        wave_fake = wave_fake.detach()
+        wave_fake = random_flip(wave_fake.detach())
         with torch.cuda.amp.autocast(enabled=args.fp16):
             loss_D = 0
             logits = D.logits(wave_fake)
             for logit in logits:
-                loss_D += BCE(logit, torch.ones_like(logit))  / len(logits)
+                loss_D += BCE(logit, torch.ones_like(logit)) / len(logits)
             logits = D.logits(wave_src)
             for logit in logits:
-                loss_D += BCE(logit, torch.zeros_like(logit))  / len(logits)
+                loss_D += BCE(logit, torch.zeros_like(logit)) / len(logits)
         scaler.scale(loss_D).backward()
         torch.nn.utils.clip_grad_norm_(D.parameters(), 1.0, 2.0)
         scaler.step(OptD)

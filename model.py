@@ -18,7 +18,7 @@ def initialize_weight(model):
         nn.init.normal_(model.weight, mean=0.0, std=0.02)
 
 
-def instance_norm(x, dim=(1, 2), eps=1e-6):
+def instance_norm(x, dim=(2), eps=1e-6):
     std = torch.std(x, dim=dim, keepdim=True) + eps
     mean = torch.mean(x, dim=dim, keepdim=True)
     return (x - mean) / std
@@ -35,6 +35,7 @@ class SpeakerEncoderResBlock(nn.Module):
 
     def forward(self, x):
         res = self.pool(self.res_conv(x))
+        x = self.relu(x)
         x = self.conv1(x)
         x = self.relu(x)
         x = self.conv2(x)
@@ -61,8 +62,9 @@ class SpeakerEncoder(nn.Module):
     def forward(self, x):
         x = self.to_mel(x)
         x = self.layers(x)
-        x = x.mean(dim=2, keepdim=True)
         x = self.output_layer(x)
+        x = F.leaky_relu(x, 0.2)
+        x = x.mean(dim=2, keepdim=True)
         mean, logvar = x.chunk(2, dim=1)
         return mean, logvar
 
@@ -122,12 +124,12 @@ class ContentEncoder(nn.Module):
         x = self.input_layer(x)
         for r, d in zip(self.res_blocks, self.downsamples):
             x = r(x)
+            x = F.gelu(x)
             x = d(x)
         x = self.output_layers(x)
         x = x / (torch.sum(x**2 + 1e-6, dim=1, keepdim=True) ** 0.5)
         if normalize:
             x = instance_norm(x)
-        length = x.shape[2]
         return x
 
 
@@ -178,7 +180,7 @@ class Generator(nn.Module):
                 weight_norm(nn.Conv1d(4, 512, 7, 1, 3, padding_mode='reflect')),
                 nn.GELU(),
                 weight_norm(nn.Conv1d(512, 512, 7, 1, 3, padding_mode='reflect')))
-        self.output_layer = nn.Sequential (
+        self.output_layer = nn.Sequential(
                 nn.GELU(),
                 weight_norm(
                     nn.Conv1d(32, 1, 7, 1, 3, padding_mode='reflect')))
@@ -187,6 +189,7 @@ class Generator(nn.Module):
     def forward(self, x, spk):
         x = self.input_layers(x)
         for r, u in zip(self.res_blocks, self.upsamples):
+            x = F.gelu(x)
             x = u(x)
             x = r(x, spk)
         x = self.output_layer(x)

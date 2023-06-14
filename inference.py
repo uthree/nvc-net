@@ -18,7 +18,7 @@ parser.add_argument('-i', '--input', default='./inputs',
                     help="Input directory")
 parser.add_argument('-o', '--output', default='./outputs',
                     help="Output directory")
-parser.add_argument('-t', '--target', default='./target.wav',
+parser.add_argument('-t', '--target', default='target.wav',
                     help="Target voice")
 
 args = parser.parse_args()
@@ -31,14 +31,18 @@ Es = C.speaker_encoder
 Ec = C.content_encoder
 G = C.generator
 
-print("Encoding target speaker...")
+if args.target == 'random':
+    print("Sampling from gaussian deviation...")
+    spk = torch.randn(1, 128, 1).to(device)
+else:
+    print("Encoding target speaker...")
 
-wf, sr = torchaudio.load(args.target)
-wf = wf.to(device)
-wf = resample(wf, sr, 22050)
+    wf, sr = torchaudio.load(args.target)
+    wf = wf.to(device)
+    wf = resample(wf, sr, 22050)
 
-mean, logvar = Es(wf)
-spk = mean #+ torch.exp(logvar) * torch.randn(*logvar.shape, device=logvar.device) * torch.exp(logvar)
+    mean, logvar = Es(wf)
+    spk = mean + torch.exp(logvar) * torch.randn(*logvar.shape, device=logvar.device)
 
 if not os.path.exists(args.output):
     os.mkdir(args.output)
