@@ -111,7 +111,7 @@ for epoch in range(args.epoch):
             for logit in logits:
                 loss_adv += BCE(logit, torch.zeros_like(logit)) / len(logits)
             
-            loss_con = ((Ec(wave_fake) - c.detach()) ** 2).mean()
+            loss_con = ((Ec(wave_fake) - c) ** 2).mean()
 
             loss_kl = (-1 - src_logvar + torch.exp(src_logvar) + src_mean ** 3).mean()
             fake_mean, fake_logvar = Es(wave_fake)
