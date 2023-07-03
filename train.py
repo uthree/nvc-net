@@ -114,7 +114,6 @@ for epoch in range(args.epoch):
             loss_con = ((Ec(wave_fake) - c) ** 2).mean()
 
             loss_kl = (-1 - src_logvar + torch.exp(src_logvar) + src_mean ** 2).mean()
-            fake_mean, fake_logvar = Es(wave_fake)
             
             loss_C = loss_adv + loss_rec * weight_rec + weight_con * loss_con + weight_kl * loss_kl 
         scaler.scale(loss_C).backward()
@@ -136,6 +135,7 @@ for epoch in range(args.epoch):
             logits = D.logits(wave_src)
             for logit in logits:
                 loss_D += BCE(logit, torch.zeros_like(logit)) / len(logits)
+            loss_D = loss_D / 2
         scaler.scale(loss_D).backward()
         torch.nn.utils.clip_grad_norm_(D.parameters(), 1.0, 2.0)
         scaler.step(OptD)
