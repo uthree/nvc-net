@@ -144,7 +144,7 @@ for epoch in range(args.epoch):
 
         if batch % args.save_frequency == 0:
             save_models(C, D)
-        tqdm.write(f"Adv.: {loss_adv.item():.4f}, F.M.: {loss_fm.item():.4f}, Mel.: {loss_mel.item():.4f}, K.L.: {loss_kl.item():.4f}, Con. {loss_con.item():.4f}")
+        tqdm.write(f"Adv.: {loss_adv.item():.4f}, F.M.: {loss_fm.item():.4f}, Mel.: {loss_mel.item():.4f}, K.L.: {loss_kl.item():.4f}, Con.: {loss_con.item():.4f}")
         bar.set_description(f"C: {loss_C.item():.4f}, D: {loss_D.item():.4f}")
         bar.update(N)
 
