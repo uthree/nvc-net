@@ -16,7 +16,12 @@ def pad_wave(x, period=256):
 def initialize_weight(model):
     if isinstance(model, nn.Conv1d):
         nn.init.normal_(model.weight, mean=0.0, std=0.02)
-
+        if model.bias != None:
+            nn.init.normal_(model.bias, mean=0.0, std=0.0)
+    if isinstance(model, nn.ConvTranspose1d):
+        nn.init.normal_(model.weight, mean=0.0, std=0.02)
+        if model.bias != None:
+            nn.init.normal_(model.bias, mean=0.0, std=0.0)
 
 def instance_norm(x, dim=(2), eps=1e-6):
     std = torch.std(x, dim=dim, keepdim=True) + eps
@@ -56,15 +61,15 @@ class SpeakerEncoder(nn.Module):
                 SpeakerEncoderResBlock(64, 128),
                 SpeakerEncoderResBlock(128, 256),
                 SpeakerEncoderResBlock(256, 512))
-        self.output_layer = nn.Conv1d(512, 256, 1, 1, 0)
+        self.output_layer = weight_norm(nn.Conv1d(512, 256, 1, 1, 0))
         self.apply(initialize_weight)
 
     def forward(self, x):
         x = self.to_mel(x)
         x = self.layers(x)
-        x = self.output_layer(x)
-        x = F.leaky_relu(x, 0.2)
         x = x.mean(dim=2, keepdim=True)
+        x = F.leaky_relu(x, 0.2)
+        x = self.output_layer(x)
         mean, logvar = x.chunk(2, dim=1)
         return mean, logvar
 
