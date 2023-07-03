@@ -28,7 +28,7 @@ class SpeakerEncoderResBlock(nn.Module):
     def __init__(self, input_channels, output_channels):
         super().__init__()
         self.res_conv = weight_norm(nn.Conv1d(input_channels, output_channels, 1, 1, 0, bias=False))
-        self.pool = nn.AvgPool1d(2)
+        self.pool = nn.AvgPool1d(4, 2, 1)
         self.conv1 = weight_norm(nn.Conv1d(input_channels, input_channels, 3, 1, 1))
         self.relu = nn.LeakyReLU(0.2)
         self.conv2 = weight_norm(nn.Conv1d(input_channels, output_channels, 1, 1, 0))
@@ -118,7 +118,7 @@ class ContentEncoder(nn.Module):
                 weight_norm(nn.Conv1d(512, 4, 7, 1, 3, padding_mode='reflect', bias=False)))
         self.apply(initialize_weight)
 
-    def forward(self, x, normalize=False):
+    def forward(self, x):
         x = pad_wave(x)
         x = x.unsqueeze(1)
         x = self.input_layer(x)
@@ -128,8 +128,6 @@ class ContentEncoder(nn.Module):
             x = d(x)
         x = self.output_layers(x)
         x = x / (torch.sum(x**2 + 1e-6, dim=1, keepdim=True) ** 0.5)
-        if normalize:
-            x = instance_norm(x)
         return x
 
 
@@ -316,7 +314,7 @@ class Discriminator(nn.Module):
         fake_feat = self.MSD.feat(fake)
         loss = 0
         for r, f in zip(real_feat, fake_feat):
-            loss += (f-r).abs().mean()
+            loss += (f-r).abs().mean() / len(real_feat)
         return loss
 
 

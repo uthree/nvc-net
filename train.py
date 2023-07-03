@@ -58,7 +58,7 @@ G = C.generator
 weight_kl = 0.02
 weight_con = 10.0
 weight_rec = 10.0
-weight_mel = 1.0
+weight_mel = 4.5
 
 grad_acc = args.gradient_accumulation
 
