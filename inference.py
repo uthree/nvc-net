@@ -51,6 +51,7 @@ plt.imshow(spk.reshape(16, 8).detach().cpu().numpy())
 plt.savefig(os.path.join(args.output , f"speaker.png"))
 
 
+l2_dists = []
 for i, fname in enumerate(os.listdir(args.input)):
     print(f"Converting {fname}")
     with torch.no_grad():
@@ -61,7 +62,17 @@ for i, fname in enumerate(os.listdir(args.input)):
         plt.imshow(F.interpolate(z.unsqueeze(1), size=(64, z.shape[2])).squeeze(1).squeeze(0).cpu())
         plt.savefig(os.path.join(args.output , f"{i}.png"))
         wf = G(z, spk)
+        out_spk, _ = Es(wf)
+        spk_l2_dist = ((out_spk - spk) ** 2).mean()
+        print(f"Speaker Distance: {spk_l2_dist.item()}")
+        l2_dists.append(spk_l2_dist)
 
         wf = resample(wf, 22050, sr)
         out_path = os.path.join(args.output, f"output_{fname}_{i}.wav")
         torchaudio.save(out_path, src=wf, sample_rate=sr)
+
+l2_dists_mean = 0
+for d in l2_dists:
+    l2_dists_mean += d / len(l2_dists)
+
+print(f"Mean of distance: {l2_dists_mean}")
