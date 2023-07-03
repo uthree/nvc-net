@@ -217,7 +217,10 @@ class ScaleDiscriminator(nn.Module):
             pool = 1
             ):
         super().__init__()
-        self.pool = torch.nn.AvgPool1d(pool)
+        if pool == 1:
+            self.pool = nn.Identity()
+        else:
+            self.pool = nn.AvgPool1d(pool*2, pool)
         if norm_type == 'weight':
             norm_f = nn.utils.weight_norm
         elif norm_type == 'spectral':
