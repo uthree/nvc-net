@@ -55,7 +55,7 @@ l2_dists = []
 for i, fname in enumerate(os.listdir(args.input)):
     print(f"Converting {fname}")
     with torch.no_grad():
-        wf, sr = torchaudio.load(os.path.join(args.input, fname))
+        wf, sr = torchaudio.load(os.path.join(args.input, fname), normalize=True)
         wf = resample(wf, sr, 22050)
         
         z = Ec(wf)

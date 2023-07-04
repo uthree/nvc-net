@@ -179,7 +179,7 @@ class Generator(nn.Module):
                     weight_norm(
                         nn.ConvTranspose1d(c2, c1, ratio*2, ratio, ratio//2)))
         self.input_layers = nn.Sequential(
-                nn.GELU(),
+                nn.Identity(),
                 weight_norm(nn.Conv1d(4, 512, 7, 1, 3, padding_mode='reflect')),
                 nn.GELU(),
                 weight_norm(nn.Conv1d(512, 512, 7, 1, 3, padding_mode='reflect')))
