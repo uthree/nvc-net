@@ -30,7 +30,7 @@ def save_models(C, D):
 
 
 def random_flip(x):
-    scale = torch.randint(low=0, high=1, size=(x.shape[0], 1), device=x.device) * 2 - 1
+    scale = torch.randint(low=0, high=2, size=(x.shape[0], 1), device=x.device) * 2 - 1
     return x * scale
 
 parser = argparse.ArgumentParser(description="Train NVC-Net")
@@ -111,7 +111,7 @@ for epoch in range(args.epoch):
             for logit in logits:
                 loss_adv += BCE(logit, torch.zeros_like(logit)) / len(logits)
             
-            loss_con = ((Ec(wave_fake) - c) ** 2).mean()
+            loss_con = ((Ec(random_flip(wave_fake)) - c) ** 2).mean()
 
             loss_kl = (-1 - src_logvar + torch.exp(src_logvar) + src_mean ** 2).mean()
             
