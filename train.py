@@ -102,14 +102,14 @@ for epoch in range(args.epoch):
             c = Ec(wave_src)
             wave_rec = G(c, z_src)
 
-            loss_fm = D.feat_loss(wave_rec, random_flip(wave_src))
+            loss_fm = D.feat_loss(wave_rec, wave_src)
             loss_mel = mel_loss(wave_rec, wave_src)
             loss_rec = loss_fm + weight_mel * loss_mel
             wave_fake = G(c, z_tgt)
             loss_adv = 0
             logits = D.logits(wave_fake)
             for logit in logits:
-                loss_adv += BCE(logit, torch.zeros_like(logit)) / len(logits)
+                loss_adv += BCE(logit, torch.zeros_like(logit))
             
             loss_con = ((Ec(random_flip(wave_fake)) - c) ** 2).mean()
 
@@ -131,11 +131,11 @@ for epoch in range(args.epoch):
             loss_D = 0
             logits = D.logits(wave_fake)
             for logit in logits:
-                loss_D += BCE(logit, torch.ones_like(logit)) / len(logits)
+                loss_D += BCE(logit, torch.ones_like(logit))
             logits = D.logits(wave_src)
             for logit in logits:
-                loss_D += BCE(logit, torch.zeros_like(logit)) / len(logits)
-            loss_D = loss_D / 2
+                loss_D += BCE(logit, torch.zeros_like(logit))
+            loss_D = loss_D
         scaler.scale(loss_D).backward()
         torch.nn.utils.clip_grad_norm_(D.parameters(), 1.0, 2.0)
         scaler.step(OptD)
